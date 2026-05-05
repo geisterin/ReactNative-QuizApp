@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
-import { db, saveHighScore } from '../database/db';
-import { Question } from '../types/Question';
+import { saveHighScore } from '../database/db';
 import ResultScreen from './ResultScreen';
 import HighScoresScreen from './HighScoresScreen';
 
 const QUESTION_TIME = 20;
 
-interface QuizQuestion extends Question {
+interface QuizQuestion {
+  question: string;
+  correct: string;
   options: string[];
 }
 
@@ -22,13 +23,15 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
-function prepareQuestions(data: Question[]): QuizQuestion[] {
-  const withShuffledOptions = data.map((q) => ({
-    ...q,
-    options: shuffleArray([q.optionA, q.optionB, q.optionC]),
-  }));
-
-  return shuffleArray(withShuffledOptions);
+function decodeHtml(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&eacute;/g, 'é')
+    .replace(/&uuml;/g, 'ü')
+    .replace(/&ouml;/g, 'ö')
+    .replace(/&auml;/g, 'ä');
 }
 
 function formatTime(seconds: number): string {
@@ -37,7 +40,21 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function QuizScreen() {
+interface Props {
+  userName: string;
+  categoryId: number;
+  categoryName: string;
+  difficulty: string;
+  onBackToMenu: () => void;
+}
+
+export default function QuizScreen({
+  userName,
+  categoryId,
+  categoryName,
+  difficulty,
+  onBackToMenu,
+}: Props) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -45,30 +62,61 @@ export default function QuizScreen() {
   const [showHighScores, setShowHighScores] = useState(false);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME);
   const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+  
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progress = useRef(new Animated.Value(1)).current;
-
-  const loadQuestions = async () => {
-    try {
-      const result = await db.getAllAsync('SELECT * FROM questions');
-      const prepared = prepareQuestions(result as Question[]);
-      setQuestions(prepared);
-    } catch (error) {
-      console.log('Load error:', error);
-    }
-  };
 
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+
     progress.stopAnimation();
   };
 
+  const loadQuestionsFromAPI = async () => {
+  try {
+    setErrorMessage('');
+
+    const response = await fetch(
+      `https://opentdb.com/api.php?amount=5&category=${categoryId}&difficulty=${difficulty}&type=multiple`
+    );
+
+    const data = await response.json();
+
+    if (!data.results || data.results.length === 0) {
+      setErrorMessage('No questions found for this category and difficulty.');
+      return;
+    }
+
+    const formatted: QuizQuestion[] = data.results.map((q: any) => {
+      const correctAnswer = decodeHtml(q.correct_answer);
+
+      const options = shuffleArray([
+        ...q.incorrect_answers.map((answer: string) => decodeHtml(answer)),
+        correctAnswer,
+      ]);
+
+      return {
+        question: decodeHtml(q.question),
+        correct: correctAnswer,
+        options,
+      };
+    });
+
+    setQuestions(shuffleArray(formatted));
+  } catch (error) {
+    console.log('API error:', error);
+    setErrorMessage('Failed to load questions.');
+  }
+};
+
   const startTimer = () => {
     stopTimer();
+
     setTimeLeft(QUESTION_TIME);
     progress.setValue(1);
 
@@ -99,8 +147,11 @@ export default function QuizScreen() {
   };
 
   useEffect(() => {
-    loadQuestions();
-    return () => stopTimer();
+    loadQuestionsFromAPI();
+
+    return () => {
+      stopTimer();
+    };
   }, []);
 
   useEffect(() => {
@@ -111,23 +162,24 @@ export default function QuizScreen() {
 
   const restartQuiz = async () => {
     stopTimer();
-    await loadQuestions();
+
+    setQuestions([]);
     setIndex(0);
     setScore(0);
     setFinished(false);
     setShowHighScores(false);
     setTotalTimeSpent(0);
     setTimeLeft(QUESTION_TIME);
+
+    await loadQuestionsFromAPI();
   };
 
   if (questions.length === 0) {
     return <Text style={styles.loading}>Laadimine...</Text>;
   }
-
   if (showHighScores) {
-    return <HighScoresScreen onBack={() => setShowHighScores(false)} />;
-  }
-
+  return <HighScoresScreen onBack={() => setShowHighScores(false)} />;
+}
   if (finished) {
     const wrong = questions.length - score;
     const percentage = Math.round((score / questions.length) * 100);
@@ -140,6 +192,7 @@ export default function QuizScreen() {
         percentage={percentage}
         durationSeconds={totalTimeSpent}
         onRestart={restartQuiz}
+        onBackToMenu={onBackToMenu}
         onShowHighScores={() => setShowHighScores(true)}
       />
     );
@@ -167,7 +220,17 @@ export default function QuizScreen() {
       setIndex(index + 1);
     } else {
       const percentage = Math.round((newScore / questions.length) * 100);
-      await saveHighScore(newScore, questions.length, percentage, newTotalTime);
+
+      await saveHighScore(
+  newScore,
+  questions.length,
+  percentage,
+  newTotalTime,
+  userName,
+  categoryName,
+  difficulty
+);
+
       setScore(newScore);
       setFinished(true);
     }

@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import QuizScreen from './screens/QuizScreen';
-import { initDB, insertQuestions } from './database/db';
+import StartScreen, { QuizSettings } from './screens/StartScreen';
+import { initDB } from './database/db';
 
 export default function App() {
+  const [settings, setSettings] = useState<QuizSettings | null>(null);
+
   useEffect(() => {
     const setup = async () => {
       try {
-        await initDB();
-        await insertQuestions();
+        await initDB();      
       } catch (error) {
         console.log('DB setup error:', error);
       }
@@ -16,5 +18,17 @@ export default function App() {
     setup();
   }, []);
 
-  return <QuizScreen />;
+  if (!settings) {
+    return <StartScreen onStart={setSettings} />;
+  }
+
+  return (
+    <QuizScreen
+      userName={settings.userName}
+      categoryId={settings.categoryId}
+      categoryName={settings.categoryName}
+      difficulty={settings.difficulty}
+      onBackToMenu={() => setSettings(null)}
+    />
+  );
 }

@@ -4,10 +4,13 @@ import { getHighScores } from '../database/db';
 
 interface HighScoreItem {
   id: number;
+  player_name: string;
   score: number;
   total: number;
   percentage: number;
   duration_seconds: number;
+  category: string;
+  difficulty: string;
   created_at: string;
 }
 
@@ -47,10 +50,23 @@ export default function HighScoresScreen({ onBack }: Props) {
         renderItem={({ item, index }) => (
           <View style={styles.card}>
             <Text style={styles.text}>
-              {index + 1}. Score: {item.score}/{item.total}
+              {index + 1}. {item.player_name || 'Player'}
             </Text>
+
+            <Text style={styles.text}>
+              Score: {item.score}/{item.total}
+            </Text>
+
             <Text style={styles.text}>Percentage: {item.percentage}%</Text>
-            <Text style={styles.text}>Time: {formatTime(item.duration_seconds ?? 0)}</Text>
+
+            <Text style={styles.text}>
+              Time: {formatTime(item.duration_seconds ?? 0)}
+            </Text>
+
+            <Text style={styles.text}>
+              {item.category || 'General'} • {item.difficulty || 'Mixed'}
+            </Text>
+
             <Text style={styles.date}>{item.created_at}</Text>
           </View>
         )}
@@ -105,6 +121,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     marginTop: 20,
+    color: '#2d2542',
   },
   button: {
     backgroundColor: '#ffffff',

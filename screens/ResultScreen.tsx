@@ -8,6 +8,7 @@ interface Props {
   durationSeconds: number;
   onRestart: () => void;
   onShowHighScores: () => void;
+  onBackToMenu: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -24,6 +25,7 @@ export default function ResultScreen({
   durationSeconds,
   onRestart,
   onShowHighScores,
+  onBackToMenu,
 }: Props) {
   return (
     <View style={styles.container}>
@@ -42,6 +44,10 @@ export default function ResultScreen({
       <Pressable style={styles.button} onPress={onShowHighScores}>
         <Text style={styles.buttonText}>Show High Scores</Text>
       </Pressable>
+
+      <Pressable style={styles.button} onPress={onBackToMenu}>
+  <Text style={styles.buttonText}>Back to Menu</Text>
+</Pressable>
     </View>
   );
 }
@@ -84,5 +90,16 @@ const styles = StyleSheet.create({
     color: '#5f3db2',
     fontSize: 20,
     fontWeight: '600',
+  },
+  secondaryButton: {
+    width: '100%',
+    paddingVertical: 14,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#5a4b81',
+    fontSize: 18,
+    fontWeight: '500',
   },
 });
